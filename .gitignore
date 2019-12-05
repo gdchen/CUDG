@@ -1,3 +1,9 @@
+# mesh file
+*.txt
+
+# visualization file
+*.pdf
+
 # Prerequisites
 *.d
 
