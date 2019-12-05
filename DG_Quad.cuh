@@ -186,14 +186,15 @@ DG_QuadLine( int Order, int *pnq, double **pxq, double **pwq)
   case 15 : n = n15 ; x = x15 ; w = w15 ; break;
   case 17 : n = n17 ; x = x17 ; w = w17 ; break;
   case 19 : n = n19 ; x = x19 ; w = w19 ; break;
-  default: return -1; break;
+  default: return cudaErrorNotSupported; break;
   }
   
   (*pnq) = n;
-  *(pxq) = (double *)malloc(n*sizeof(double));
+
+  CUDA_CALL(cudaMallocManaged(pxq, n*sizeof(double))); 
   for (i=0; i<n; i++) (*pxq)[i] = x[i];
 
-  *(pwq) = (double *)malloc(n*sizeof(double));
+  CUDA_CALL(cudaMallocManaged(pwq, n*sizeof(double))); 
   for (i=0; i<n; i++) (*pwq)[i] = w[i];
 
   return cudaSuccess;
@@ -633,12 +634,12 @@ DG_QuadTriangle(int Order, int *pnq, double **pxq, double **pwq)
   case 14: n = n14; x = x14; w = w14; break;
   case 17: n = n17; x = x17; w = w17; break;
   case 19: n = n19; x = x19; w = w19; break;
-  default: return -1; break;
+  default: return cudaErrorNotSupported; break;
   }
   
   (*pnq) = n;
-  *(pxq) = (double *)malloc(2*n*sizeof(double));
-  *(pwq) = (double *)malloc(n*sizeof(double));
+  CUDA_CALL(cudaMallocManaged(pxq, 2*n*sizeof(double))); 
+  CUDA_CALL(cudaMallocManaged(pwq, n*sizeof(double))); 
   for (i=0; i<2*n; i++) (*pxq)[i] = x[i];
   for (i=0; i<  n; i++) (*pwq)[i] = w[i];
 
