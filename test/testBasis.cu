@@ -1,5 +1,6 @@
 #include <stdio.h> 
 #include "../DG_Basis.cuh"
+#include "../DG_Quad.cuh"
 #include "../CUDA_Helper.cuh"
 
 int main()

@@ -5,7 +5,7 @@
 int main()
 {
   DG_Mesh *Mesh;
-  createMesh(&Mesh); // = (DG_Mesh *)malloc(sizeof(DG_Mesh));
+  createMesh(&Mesh); 
   int N = 8;
   generateMesh(Mesh,5,N);
   printf("halfL %f,  N %d,  h %f \n", Mesh->halfL,Mesh->N, Mesh->h);
