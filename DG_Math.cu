@@ -1,193 +1,126 @@
-#ifndef _DG_Math_
-#define _DG_Math_ 
+/* This is the source file for the math lib 
+ *
+ * Author: Guodong Chen
+ * Email:  cgderic@umich.edu
+ * Last modified: 12/06/2019
+ */ 
 
-#include <cblas.h>
-#include <lapacke.h>
-// Math library for DG_solver
-
+#include <stdlib.h>
+#include "CUDA_Helper.cuh"
+#include "DG_Math.cuh"
 // Matrix multiplication 
 // C = AxB
-void DG_MxM_Set(int rA, int n, int cB, const double *A, const double *B, double *C)
+__device__ __host__ void  
+DG_MxM_Set(int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = 1.0;  
-  double beta = 0.0;
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
+  DG_cMxM_Set(1.0, rA, n, cB, A, B, C);
 }
 
 
 // C = cxAxB
-void DG_cMxM_Set(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
+__device__ __host__ void  
+DG_cMxM_Set(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = c;  
-  double beta = 0.0;
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
+  int i, j, k;
+  for (i=0; i<rA; i++){
+    for (j=0; j<cB; j++){
+      C[i*cB+j] = .0; 
+      for (k=0; k<n; k++){
+        C[i*cB+j] += c*A[i*n+k]*B[k*cB+j];
+      }
+    }
+  }
 }
 
 
 // C += AxB
-void DG_MxM_Add(int rA, int n, int cB, const double *A, const double *B, double *C)
+__device__ __host__ void
+DG_MxM_Add(int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = 1.0; 
-  double beta = 1.0; 
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
+  DG_cMxM_Add(1.0, rA, n, cB, A, B, C); 
 }
 
 
 // C += cxAxB
-void DG_cMxM_Add(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
+__device__ __host__ void  
+DG_cMxM_Add(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = c; 
-  double beta = 1.0; 
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
+  int i, j, k;
+  for (i=0; i<rA; i++){
+    for (j=0; j<cB; j++){
+      for (k=0; k<n; k++){
+        C[i*cB+j] += c*A[i*n+k]*B[k*cB+j]; 
+      }
+    }
+  }
 }
 
-
-
-
-// C = -AxB
-void DG_MxM_Sub(int rA, int n, int cB, const double *A, const double *B, double *C)
+// C -= AxB
+__device__ __host__ void 
+DG_MxM_Sub(int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = -1.0;
-  double beta = 1.0;
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
+  DG_cMxM_Add(-1.0, rA, n, cB, A, B, C); 
 }
 
 
 // C -= cxAxB
-void DG_cMxM_Sub(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
+__device__ __host__ void 
+DG_cMxM_Sub(double c, int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = -c;
-  double beta = 1.0;
-  int lda = n;
-  int ldb = cB; 
-  int ldc = cB; 
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
+  DG_cMxM_Add(-c, rA, n, cB, A, B, C); 
 }
 
 
 
 // C = AxB^T
-void DG_MxMT_Set(int rA, int n, int cB, const double *A, const double *B, double *C)
+// the dimension if of op(A) and op(B)
+// dim(A) = rAxn,  dim(B^T) = n*cB   <==>   dim(B) = cB*n 
+__device__ __host__ void 
+DG_MxMT_Set(int rA, int n, int cB, const double *A, const double *B, double *C)
 {
-  double alpha = 1.0;
-  double beta = 0.0; 
-  int lda = n;
-  int ldb = n;
-  int ldc = cB;
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
-
+  int i, j, k;    
+  for (i=0; i<rA; i++){
+    for (j=0; j<cB; j++){
+      C[i*cB+j] = .0;    // initialization 
+      for (k=0; k<n; k++){
+        C[i*cB+j] += A[i*n+k]*B[j*n+k]; // B^T[k,j] == B[j,k]
+      }
+    }
+  }
 }
 
 
 // C = A^TxB
-void DG_MTxM_Set(int rA, int n, int cB, double *A, double *B, double *C)
+// dim(A^T) = rAxn   <==>   dim(A) = n*rA
+// dim(B) = n*cB
+__device__ __host__ void 
+DG_MTxM_Set(int rA, int n, int cB, double *A, double *B, double *C)
 {
-  double alpha = 1.0;
-  double beta = 0.0; 
-  int lda = rA;
-  int ldb = cB;
-  int ldc = cB;
-  cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
+  int i, j, k; 
+  for (i=0; i<rA; i++){
+    for (j=0; j<cB; j++){
+      C[i*cB+j] = .0;   // initialization 
+      for (k=0; k<n; k++){
+        C[i*cB+j] += A[k*rA+i]*B[k*cB+j];  // A^T[i,k] = A[k,i]
+      }
+    }
+  }
 }
 
 
 // C += A^TxB
-void DG_MTxM_Add(int rA, int n, int cB, double *A, double *B, double *C)
+// dim(A^T) = rAxn   <==>   dim(A) = nxrA
+// dim(B) = nxcB
+__device__ __host__ void  
+DG_MTxM_Add(int rA, int n, int cB, double *A, double *B, double *C)
 {
-  double alpha = 1.0;
-  double beta = 1.0; 
-  int lda = rA;
-  int ldb = cB;
-  int ldc = cB;
-  cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, 
-                 rA, cB, n, alpha, A,
-                 lda, B, ldb,
-                 beta, C, ldc);
-
-}
-
-
-
-
-// return matrix inverse to a new vector 
-int DG_CreateInv(int n, const double *A, double *InvA)
-{
-  // all the inputs should be allocated 
-  int info, i, j; 
-  int ipiv[n];
-  for (i=0; i<n; i++){
-    for (j=0; j<n; j++) InvA[i*n+j] = A[i*n+j];
+  int i, j, k;
+  for (i=0; i<rA; i++){
+    for (j=0; j<cB; j++){
+      for (k=0; k<n; k++){
+        C[i*cB+j] += A[k*rA+i]*B[k*cB+j];  // A^T[i,k] = A[k,i]
+      }
+    }
   }
-  if(!(info = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n, n, InvA, n, ipiv)))
-    info = LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, InvA, n, ipiv);
-  if (info!= 0) printf("Error Inverse\n");
-  return info;
-
-/*  lapack_int LAPACKE_dgetri( int matrix_layout, lapack_int n, double* a,
-                           lapack_int lda, const lapack_int* ipiv );
-
-  lapack_int LAPACKE_dgetrf( int matrix_layout, lapack_int m, lapack_int n,
-                           double* a, lapack_int lda, lapack_int* ipiv );*/
 }
 
-
-// return matrix inverse into the original vector 
-int DG_Inv(int n, double *A)
-{
-  int info;
-  int ipiv[n]; 
-  if (!(info = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n, n, A, n, ipiv)))
-    info = LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, A, n, ipiv);
-  if (info != 0) printf("Error Inverse !\n");
-  return info;
-}
-
-
-
-
-#endif
