@@ -39,21 +39,27 @@ DG_MxMT_Set(int rA, int n, int cB, const double *A, const double *B, double *C);
 
 // C = A^TxB
 __device__ __host__ void  
-DG_MTxM_Set(int rA, int n, int cB, double *A, double *B, double *C);
+DG_MTxM_Set(int rA, int n, int cB, const double *A, const double *B, double *C);
 
 // C += A^TxB
 __device__ __host__ void  
-DG_MTxM_Add(int rA, int n, int cB, double *A, double *B, double *C);
+DG_MTxM_Add(int rA, int n, int cB, const double *A, const double *B, double *C);
 
 // return matrix inverse to a new vector 
 __device__ __host__ void 
 DG_CreateInv(int n, const double *A, double *InvA);
 
 // return matrix inverse into the original vector 
-__device__ __host__ void 
-DG_Inv(int n, double *A);
+__device__ __host__ int 
+DG_Inv(int n, double *A, double *iA);
 
 
+__device__ __host__ static int 
+computePLU(double *A, int *P, int r);
 
+__device__ __host__ static int 
+solvePLU(double *LU, int *P, double *b, double *u, int r);
 
+__device__ __host__ static int 
+invmat(double *A, double *iA, int r);
 #endif

@@ -13,12 +13,13 @@ void printMatrix(int m, int n, double *A){
 }
 int main(int argc, char const *argv[])
 {
-  int i, j; 
   double A[3*2] = {1, 2, 3, 4, 5, 6};
   double AT[2*3] = {1,3,5,2,4,6};
   double B[2*3] = {7, 8, 9, 10, 11, 12}; 
   double BT[3*2] = {7,10,8,11,9,12}; 
   double C[9] = {0};
+  double iA[9] = {0};
+  double iB[4] = {0}; 
 
   printf("A = \n"); 
   printMatrix(3,2, A);
@@ -83,6 +84,19 @@ int main(int argc, char const *argv[])
   printMatrix(3,3,C);
 
 
+  printf("test inversion\n");
+  printf("iA = (A^TxA)^-1\n");
+  DG_MTxM_Set(2,3,2,A,A,C);
+  printMatrix(2,2,C);
+  DG_Inv(2,C,iA);
+  printMatrix(2,2,C);
+  printMatrix(2,2,iA);
+  printf("iB = (BxB^T)\n");
+  DG_MxMT_Set(2,3,2,B,B,C);
+  printMatrix(2,2,C);
+  DG_Inv(2,C,iB);
+  printMatrix(2,2,C);
+  printMatrix(2,2,iB);
 //  double InvA[2*2] = {1,2,3,4};
 //  double x[2] = {1,2};
 //  //DG_Inv(2, InvA);
