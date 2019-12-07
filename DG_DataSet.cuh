@@ -3,10 +3,10 @@
 
 
 #include <stdlib.h>
-#include "DG_Const.h"
-#include "DG_Mesh.h"
-#include "DG_Basis.h"
-#include "DG_Math.h"
+#include "DG_Const.cuh"
+#include "DG_Mesh.cuh"
+#include "DG_Basis.cuh"
+#include "DG_Math.cuh"
 
 // DataSet structure stores the states vector and mass matrix 
 
@@ -71,7 +71,7 @@ computeMassMatrix(DG_DataSet *DataSet, const DG_Mesh *Mesh, const DG_BasisData *
  * outputs : DataSet 
  * return  : cuda error code 
  */ 
-cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh)
+cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh);
 
 
 // initialization with least square projection 
@@ -190,7 +190,7 @@ cudaError_t getLagrangeNodes(int order, double **xy);
  * return  : cuda error code
  */ 
 
-cudaError_t getGlobalLagrangeNodes(int order, const DG_Mesh *Mesh, double **xyGlobal)
+cudaError_t getGlobalLagrangeNodes(int order, const DG_Mesh *Mesh, double **xyGlobal);
 
 
 /* Function: getGlobalQuadNodes 

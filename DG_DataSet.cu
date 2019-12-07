@@ -10,6 +10,7 @@
 #include "DG_Mesh.cuh"
 #include "DG_Quad.cuh"
 #include "DG_Basis.cuh"
+#include "DG_Math.cuh"
 #include "DG_DataSet.cuh"
 
 
@@ -51,10 +52,10 @@ cudaError_t freeDataSet(DG_DataSet *DataSet)
     for (i=0; i<nElem; i++) 
       CUDA_CALL(cudaFree(DataSet->State[i]));
   }
-  free(DataSet->State);  
-  free(DataSet->MassMatrix);  
-  free(DataSet->InvMassMatrix);
-  free(DataSet);
+  CUDA_CALL(cudaFree(DataSet->State));  
+  CUDA_CALL(cudaFree(DataSet->MassMatrix));  
+  CUDA_CALL(cudaFree(DataSet->InvMassMatrix));
+  CUDA_CALL(cudaFree(DataSet));
   return cudaSuccess; 
 }
 
@@ -70,15 +71,16 @@ computeMassMatrix(DG_DataSet *DataSet, const DG_Mesh *Mesh, const DG_BasisData *
   int np = BasisData->np;
   int nq2 = BasisData->nq2; 
   double *Phi = BasisData->Phi; 
-  double *wq2 = BasisData->wq2;  
+  double *wq2 = BasisData->wq2; 
+  double *temp; 
   // allocate the memory for the massmatrix and inverse mass matrix 
   CUDA_CALL(cudaMallocManaged(&(DataSet->MassMatrix), nElem*sizeof(double *)));
   CUDA_CALL(cudaMallocManaged(&(DataSet->InvMassMatrix), nElem*sizeof(double *))); 
-
+  CUDA_CALL(cudaMallocManaged(&(temp), np*np*sizeof(double))); 
   int n, i, j, q2;  
   for (n=0; n<nElem; n++){
     CUDA_CALL(cudaMallocManaged(&(DataSet->MassMatrix[n]), np*np*sizeof(double)));
-    CUDA_CALL(cudaMallocManaged(&(DataSet->InvMassMatrix[n], np*np*sizeof(double)))); 
+    CUDA_CALL(cudaMallocManaged(&(DataSet->InvMassMatrix[n]), np*np*sizeof(double))); 
     for (i=0; i<np; i++){
       for (j=0; j<np; j++){
         DataSet->MassMatrix[n][i*np+j] = 0.0;    // Initialization  
@@ -86,14 +88,17 @@ computeMassMatrix(DG_DataSet *DataSet, const DG_Mesh *Mesh, const DG_BasisData *
           DataSet->MassMatrix[n][i*np+j] += Phi[q2*np+i]*Phi[q2*np+j]*wq2[q2]; 
         }
         DataSet->MassMatrix[n][i*np+j] *= Mesh->detJ[n];
-        DataSet->InvMassMatrix[n][i*np+j] = DataSet->MassMatrix[n][i*np+j];
+        //DataSet->InvMassMatrix[n][i*np+j] = DataSet->MassMatrix[n][i*np+j];
+        temp[i*np+j] = DataSet->MassMatrix[n][i*np+j]; 
 
       }
     }
     // invert the massmatrix to get InvMassMatrix 
-    DG_Inv(np, DataSet->InvMassMatrix[n]); 
+    //DG_Inv(np, DataSet->InvMassMatrix[n]); 
+    DG_Inv(np, temp, DataSet->InvMassMatrix[n]);
   }
-
+  CUDA_CALL(cudaFree(temp));
+  return cudaSuccess;
 }
 
 
@@ -218,7 +223,8 @@ getGlobalLagrangeNodes(int order, const DG_Mesh *Mesh, double **xyGlobal)
 
 
 // global quad points 
-int getGlobalQuadPoints(double **xyGlobal, const DG_Mesh *Mesh, const DG_BasisData *BasisData)
+cudaError_t 
+getGlobalQuadPoints(double **xyGlobal, const DG_Mesh *Mesh, const DG_BasisData *BasisData)
 {
   int nq2 = BasisData->nq2; 
   double *xyq = BasisData->xyq; 

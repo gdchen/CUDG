@@ -97,36 +97,6 @@ int main(int argc, char const *argv[])
   DG_Inv(2,C,iB);
   printMatrix(2,2,C);
   printMatrix(2,2,iB);
-//  double InvA[2*2] = {1,2,3,4};
-//  double x[2] = {1,2};
-//  //DG_Inv(2, InvA);
-//  double b[2] = {0.1, 0.2};
-//  double bT[3] = {0.1,0.2,0.3};
-//  double C[2];
-//  //double CT[2];
-//  DG_MxM_Set(3,2,1,*A, b, C);
-//  for (i=0; i<3; i++) printf("%f \n", C[i]);
-//  printf("************\n");
-//  
-//  DG_MxM_Add(3,2,1,*A, b, C); 
-//  for (i=0; i<3; i++) printf("%f\n", C[i]);
-//  DG_MxM_Sub(3,2,1,*A, b, C);
-//  DG_MxM_Sub(3,2,1,*A, b, C);
-//  for (i=0; i<3; i++) printf("%f \n", C[i]);
-//
-//  double T[3*3] = {0};
-//  DG_MxMT_Set(3,2,3, *A, *A, T);
-//  for (i=0; i<3; i++){
-//    for(j=0; j<3; j++) printf("%f ", T[i*3+j]);
-//      printf("\n");
-//  }
-//
-//  printf("MTxM: \n");
-//  DG_MTxM_Set(2, 3, 2, *A, *A, C);
-//  for (i=0; i<2; i++){
-//    for (j=0; j<2; j++) printf("%f ", C[i*2+j]);
-//    printf("\n");
-//  }
 
   return 0;
 }
