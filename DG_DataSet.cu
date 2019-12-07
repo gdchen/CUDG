@@ -109,8 +109,8 @@ cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh)
   int order = DataSet->order; 
   int np = (order+1)*(order+2)/2; 
   int i, j;
-  // no need to call cudaMalloc as the memory pointer passed in 
-  // is already on the device and free by the device directly 
+  // no need to call cudaMalloc as xyGlobal is a temp variable,  
+  // only used on host, by value
   double **xyGlobal = (double **)malloc(nElem*np*sizeof(double *));
   for (i=0; i<nElem*np; i++) xyGlobal[i] = (double *)malloc(2*sizeof(double));
   getGlobalLagrangeNodes(order, Mesh, xyGlobal);
@@ -177,8 +177,8 @@ cudaError_t getLagrangeNodes(int order, double **xy)
 {
   // xy should be allocated before passed in, xy[np][2]
   int i,j, counter; 
-  // no need to cudaMalloc as it's local memory 
-  // can be alloc and free by either CPU or GPU in the same function 
+  // no need to cudaMalloc as it's a CPU temp variable, 
+  // only used on host by value
   double *x = (double *)malloc((order+1)*sizeof(double)); // 1d Lagrange nodes 
   if (order == 0) x[0] = 0.333333333333333333;
   else {for (i=0; i<order+1; i++) x[i] = 1.0/order*i;} 
@@ -205,6 +205,7 @@ getGlobalLagrangeNodes(int order, const DG_Mesh *Mesh, double **xyGlobal)
   double **Jac = Mesh->Jac; 
   int i, j;
   double **xy;
+  // no need to call cudaMalloc, as it's host temp variable
   xy = (double **)malloc(np*sizeof(double *));
   for (i=0; i<np; i++) xy[i] = (double *)malloc(2*sizeof(double));
   double *x0; 
