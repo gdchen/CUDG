@@ -43,14 +43,11 @@ cudaError_t freeDataSet(DG_DataSet *DataSet)
   int nElem = DataSet->nElem;
   int i;
   if (DataSet->MassMatrix != NULL){
-    for (i=0; i<nElem; i++){
-      CUDA_CALL(cudaFree(DataSet->MassMatrix[i])); 
-      CUDA_CALL(cudaFree(DataSet->InvMassMatrix[i]));
-    }
+    CUDA_CALL(cudaFree(DataSet->MassMatrix[0])); 
+    CUDA_CALL(cudaFree(DataSet->InvMassMatrix[0]));
   }
   if (DataSet->State != NULL){
-    for (i=0; i<nElem; i++) 
-      CUDA_CALL(cudaFree(DataSet->State[i]));
+    CUDA_CALL(cudaFree(DataSet->State[0]));
   }
   CUDA_CALL(cudaFree(DataSet->State));  
   CUDA_CALL(cudaFree(DataSet->MassMatrix));  
@@ -73,14 +70,17 @@ computeMassMatrix(DG_DataSet *DataSet, const DG_Mesh *Mesh, const DG_BasisData *
   double *Phi = BasisData->Phi; 
   double *wq2 = BasisData->wq2; 
   double *temp; 
+  double *tempMass, *tempInvMass; 
   // allocate the memory for the massmatrix and inverse mass matrix 
   CUDA_CALL(cudaMallocManaged(&(DataSet->MassMatrix), nElem*sizeof(double *)));
   CUDA_CALL(cudaMallocManaged(&(DataSet->InvMassMatrix), nElem*sizeof(double *))); 
   CUDA_CALL(cudaMallocManaged(&(temp), np*np*sizeof(double))); 
+  CUDA_CALL(cudaMallocManaged(&tempMass, nElem*np*np*sizeof(double)));
+  CUDA_CALL(cudaMallocManaged(&tempInvMass, nElem*np*np*sizeof(double))); 
   int n, i, j, q2;  
   for (n=0; n<nElem; n++){
-    CUDA_CALL(cudaMallocManaged(&(DataSet->MassMatrix[n]), np*np*sizeof(double)));
-    CUDA_CALL(cudaMallocManaged(&(DataSet->InvMassMatrix[n]), np*np*sizeof(double))); 
+    DataSet->MassMatrix[n] = tempMass + n*np*np;
+    DataSet->InvMassMatrix[n] = tempInvMass + n*np*np; 
     for (i=0; i<np; i++){
       for (j=0; j<np; j++){
         DataSet->MassMatrix[n][i*np+j] = 0.0;    // Initialization  
@@ -116,11 +116,13 @@ cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh)
   getGlobalLagrangeNodes(order, Mesh, xyGlobal);
   // this chunck of memory is accessiable by both CPU and GPU 
   // use cudaMalloc instead 
+  double *tempState; 
   CUDA_CALL(cudaMallocManaged(&(DataSet->State), nElem*sizeof(double *))); 
+  CUDA_CALL(cudaMallocManaged(&tempState, np*NUM_OF_STATES*sizeof(double))); 
 
   double f0, f1, f2, rho, u, v, p;
   for (i=0; i<nElem; i++){
-    CUDA_CALL(cudaMallocManaged(&(DataSet->State[i]), np*NUM_OF_STATES*sizeof(double))); 
+    DataSet->State[i] = tempState + i*np*NUM_OF_STATES; 
     for (j=0; j<np; j++){
       f0 = getf0(xyGlobal[i*np+j]);
       f1 = getf1(f0);
