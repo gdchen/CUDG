@@ -40,5 +40,7 @@ DG_DataSet.o: DG_DataSet.cu DG_DataSet.cuh DG_Const.cuh DG_Mesh.cuh DG_Basis.cuh
 DG_All.o: DG_All.cu DG_All.cuh DG_Mesh.cuh DG_Basis.cuh DG_DataSet.cuh 
 	nvcc -c DG_All.cu 
 
+DG_Residual.o: DG_Residual.cu DG_Residual.cuh DG_Const.cuh DG_Mesh.cuh DG_Quad.cuh DG_Basis.cuh DG_Math.cuh DG_All.cuh 
+	nvcc -c DG_Residual.cu 
 clean:
 	rm -rf *.txt *.o *.exe
