@@ -72,7 +72,7 @@ int calculateFhat(double *Fhat, int nq1, const double *UL, const double *UR, con
  * return  : error code 
  */
 __global__ void 
-calculateVolumeRes(const DG_All *All, const double **State, double **R); 
+calculateVolumeRes(const DG_All *All, double **State, double **R); 
 
 /* Kernel Function: calculateFaceRes
  * purpose :  All     ==  all structs 
@@ -83,7 +83,7 @@ calculateVolumeRes(const DG_All *All, const double **State, double **R);
  */
 
 __global__ void 
-calculateFaceRes(const DG_All *All, const double **State, double **Rf); 
+calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR); 
 
 
 /* Kernel Function: addRes
@@ -93,7 +93,11 @@ calculateFaceRes(const DG_All *All, const double **State, double **Rf);
  * return  :
  */
 __global__ void  
-addRes2f(const DG_All *All, double **R, double **Rf, double **f);
+addRes(const DG_All *All, double **R, double **RfL, double **RfR);
+
+
+__global__ void
+Res2RHS(const DG_All *All, double **R, double **f); 
 
 
 __global__ void 
