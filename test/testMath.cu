@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "../CUDA_Helper.cuh"
 #include "../DG_Math.cuh"
 
 void printMatrix(int m, int n, double *A){
@@ -98,5 +99,6 @@ int main(int argc, char const *argv[])
   printMatrix(2,2,C);
   printMatrix(2,2,iB);
 
+  CUDA_CALL(cudaDeviceReset());
   return 0;
 }

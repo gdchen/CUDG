@@ -53,6 +53,7 @@ int main()
   }
   freeMesh(Mesh);
 
+  CUDA_CALL(cudaDeviceReset());
 
 
 

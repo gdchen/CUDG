@@ -69,5 +69,6 @@ int main()
   }
 
   freeBasisData(BasisData);
+  CUDA_CALL(cudaDeviceReset());
   return 0;
 }

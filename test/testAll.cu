@@ -33,6 +33,6 @@ int main(int argc, char const *argv[])
 //  ErrEst(All, &eu, &es, &ep);
 //  printf("%f %f %f \n", sqrt(eu/25), sqrt(es/25), ep/25);
   freeAll(All); 
-
+  CUDA_CALL(cudaDeviceReset());
   return 0;
 }

@@ -101,5 +101,7 @@ int main()
   freeBasisData(BasisData);
   freeDataSet(DataSet); 
   freeMesh(Mesh);
+
+  CUDA_CALL(cudaDeviceReset());
   return 0;
 }
