@@ -7,7 +7,7 @@
 int main()
 {
   int order = 1;
-  int N = 1;
+  int N = 2;
   int np = (order+1)*(order+2)/2; 
   DG_Mesh *Mesh; 
   createMesh(&Mesh);

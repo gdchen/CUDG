@@ -116,7 +116,7 @@ cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh)
   // use cudaMalloc instead 
   double *tempState; 
   CUDA_CALL(cudaMallocManaged(&(DataSet->State), nElem*sizeof(double *))); 
-  CUDA_CALL(cudaMallocManaged(&tempState, np*NUM_OF_STATES*sizeof(double))); 
+  CUDA_CALL(cudaMallocManaged(&tempState, nElem*np*NUM_OF_STATES*sizeof(double))); 
 
   double f0, f1, f2, rho, u, v, p;
   for (i=0; i<nElem; i++){
