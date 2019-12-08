@@ -40,8 +40,6 @@ cudaError_t createDataSet(DG_DataSet **pDataSet)
 
 cudaError_t freeDataSet(DG_DataSet *DataSet)
 {
-  int nElem = DataSet->nElem;
-  int i;
   if (DataSet->MassMatrix != NULL){
     CUDA_CALL(cudaFree(DataSet->MassMatrix[0])); 
     CUDA_CALL(cudaFree(DataSet->InvMassMatrix[0]));
