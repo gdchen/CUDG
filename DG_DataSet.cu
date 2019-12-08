@@ -141,7 +141,7 @@ cudaError_t interpolateIC(DG_DataSet *DataSet, const DG_Mesh *Mesh)
 }
 
 
-cudaError_t 
+__device__ __host__ cudaError_t 
 getIntQuadStates(double *Uxy, const double *State, const DG_BasisData *BasisData)
 {
   // All of the inputs should be allocated before passed in 
@@ -154,7 +154,7 @@ getIntQuadStates(double *Uxy, const double *State, const DG_BasisData *BasisData
 }
 
 // get states at edge quad points 
-cudaError_t 
+__device__ __host__ cudaError_t 
 getEdgeQuadStates(double *UL, double *UR, int edge, const double *StateL, const double *StateR,
                   const DG_BasisData *BasisData)
 {
