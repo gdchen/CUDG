@@ -53,11 +53,13 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
   Mesh->N = N;
   Mesh->h = (2*halfL)/N;
   Mesh->nNode = (N+1)*(N+1);
-   
+  double *tempCoord; 
+  int *tempE2N; 
   // allocate the coords 
   CUDA_CALL(cudaMallocManaged(&(Mesh->coord), Mesh->nNode*sizeof(double *)));  
+  CUDA_CALL(cudaMallocManaged(&(tempCoord), 2*Mesh->nNode*sizeof(double))); 
   for (i=0; i<Mesh->nNode; i++) 
-    CUDA_CALL(cudaMallocManaged(&(Mesh->coord[i]), 2*sizeof(double))); 
+    Mesh->coord[i] = tempCoord + 2*i; 
 
   // assign coords for every node 
   for (i=0; i<N+1; i++) 
@@ -72,8 +74,9 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
   Mesh->nElem = 2*N*N;
   // allocate E2N matrix 
   CUDA_CALL(cudaMallocManaged(&(Mesh->E2N), Mesh->nElem*sizeof(int *))); 
+  CUDA_CALL(cudaMallocManaged(&tempE2N, 3*Mesh->nElem*sizeof(int))); 
   for (i=0; i<Mesh->nElem; i++) 
-    CUDA_CALL(cudaMallocManaged(&(Mesh->E2N[i]), 3*sizeof(int))); 
+    Mesh->E2N[i] = tempE2N + 3*i; 
 
   // fill in the E2N matrix 
   counter = 0;
@@ -146,11 +149,14 @@ cudaError_t computeMeshInfo(DG_Mesh *Mesh)
   DG_IFace *IFace = Mesh->IFace; 
   double **coord = Mesh->coord;
   int **E2N = Mesh->E2N; 
-
+  double *tempJac; 
+  double *tempInvJac; 
   // allocate the memory for mesh info 
   CUDA_CALL(cudaMallocManaged(&(Mesh->Jac),    nElem*sizeof(double *)));
+  CUDA_CALL(cudaMallocManaged(&tempJac,        4*nElem*sizeof(double))); 
   CUDA_CALL(cudaMallocManaged(&(Mesh->detJ),   nElem*sizeof(double))); 
   CUDA_CALL(cudaMallocManaged(&(Mesh->InvJac), nElem*sizeof(double *))); 
+  CUDA_CALL(cudaMallocManaged(&tempInvJac,     4*nElem*sizeof(double))); 
   CUDA_CALL(cudaMallocManaged(&(Mesh->Length), nIFace*sizeof(double)));
   CUDA_CALL(cudaMallocManaged(&(Mesh->normal), nIFace*2*sizeof(double))); 
 
@@ -158,9 +164,9 @@ cudaError_t computeMeshInfo(DG_Mesh *Mesh)
   double *x0, *x1, *x2;  
   for (i=0; i<nElem; i++){
     // allocate Jacobian data 
-    CUDA_CALL(cudaMallocManaged(&(Mesh->Jac[i]), 4*sizeof(double))); 
+    Mesh->Jac[i] = tempJac + 4*i; 
     // allocate Inverse Jacbian data 
-    CUDA_CALL(cudaMallocManaged(&(Mesh->InvJac[i]), 4*sizeof(double))); 
+    Mesh->InvJac[i] = tempInvJac + 4*i; 
 
     x0 = coord[E2N[i][0]];
     x1 = coord[E2N[i][1]];
@@ -198,16 +204,12 @@ cudaError_t computeMeshInfo(DG_Mesh *Mesh)
 cudaError_t freeMesh(DG_Mesh *Mesh)
 {    
   
-  int i;
-
   // free mesh coord 
-  for (i=0; i<Mesh->nNode; i++) 
-    CUDA_CALL(cudaFree(Mesh->coord[i]));
+  CUDA_CALL(cudaFree(Mesh->coord[0]));
   CUDA_CALL(cudaFree(Mesh->coord)); 
   
   // free mesh E2N 
-  for (i=0; i<Mesh->nElem; i++) 
-    CUDA_CALL(cudaFree(Mesh->E2N[i]));
+  CUDA_CALL(cudaFree(Mesh->E2N[0]));
   CUDA_CALL(cudaFree(Mesh->E2N));
 
   // free interior faces 
@@ -215,10 +217,8 @@ cudaError_t freeMesh(DG_Mesh *Mesh)
 
   // free Jacobian data 
   if (Mesh->Jac != NULL){
-    for (i=0; i<Mesh->nElem; i++){
-      CUDA_CALL(cudaFree(Mesh->Jac[i]));
-      CUDA_CALL(cudaFree(Mesh->InvJac[i]));
-    }
+    CUDA_CALL(cudaFree(Mesh->Jac[0]));
+    CUDA_CALL(cudaFree(Mesh->InvJac[0]));
     CUDA_CALL(cudaFree(Mesh->Jac)); 
     CUDA_CALL(cudaFree(Mesh->detJ)); 
     CUDA_CALL(cudaFree(Mesh->InvJac));
