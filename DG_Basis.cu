@@ -48,7 +48,6 @@ cudaError_t createBasisData(DG_BasisData **pBasisData)
 /* free the memory of the Basis Data */
 cudaError_t freeBasisData(DG_BasisData *BasisData)
 {
-  int edge;
   CUDA_CALL(cudaFree(BasisData->sq)); 
   CUDA_CALL(cudaFree(BasisData->wq1));
   CUDA_CALL(cudaFree(BasisData->xyq));  
@@ -57,10 +56,8 @@ cudaError_t freeBasisData(DG_BasisData *BasisData)
   CUDA_CALL(cudaFree(BasisData->GPhix)); 
   CUDA_CALL(cudaFree(BasisData->GPhiy));
 
-  for (edge=0; edge<3; edge++){
-    CUDA_CALL(cudaFree(BasisData->EdgePhiL[edge]));
-    CUDA_CALL(cudaFree(BasisData->EdgePhiR[edge]));
-  }
+  CUDA_CALL(cudaFree(BasisData->EdgePhiL[0]));
+  CUDA_CALL(cudaFree(BasisData->EdgePhiR[0]));
   CUDA_CALL(cudaFree(BasisData->EdgePhiL));
   CUDA_CALL(cudaFree(BasisData->EdgePhiR));
   CUDA_CALL(cudaFree(BasisData));
@@ -101,12 +98,15 @@ cudaError_t computeBasisData(int p, DG_BasisData *BasisData)
     }
   }
   // the edge basis for left and right element 
+  double *tempL, *tempR; 
   CUDA_CALL(cudaMallocManaged(&(BasisData->EdgePhiL), 3*sizeof(double *))); 
+  CUDA_CALL(cudaMallocManaged(&tempL, 3*nq1*np*sizeof(double)));
   CUDA_CALL(cudaMallocManaged(&(BasisData->EdgePhiR), 3*sizeof(double *))); 
+  CUDA_CALL(cudaMallocManaged(&tempR, 3*nq1*np*sizeof(double)));
   // evaluate the basis at the egde nodes 
   for (edge=0; edge<3; edge++){
-    CUDA_CALL(cudaMallocManaged(&(BasisData->EdgePhiL[edge]), nq1*np*sizeof(double)));
-    CUDA_CALL(cudaMallocManaged(&(BasisData->EdgePhiR[edge]), nq1*np*sizeof(double))); 
+    BasisData->EdgePhiL[edge] = tempL + edge*nq1*np; 
+    BasisData->EdgePhiR[edge] = tempR + edge*nq1*np; 
     for (i=0; i<nq1; i++){
       RefEdge2Elem(edge, xy, BasisData->sq[i]);
       DG_TriLagrange(p, xy, BasisData->EdgePhiL[edge]+i*np);
