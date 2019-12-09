@@ -21,6 +21,7 @@ cudaError_t initMesh(DG_Mesh *Mesh){
  Mesh->E2N = NULL; // E2N
 
  Mesh->nIFace = 0;
+ Mesh->E2F = NULL;
  Mesh->IFace = NULL;
 
  Mesh->Jac = NULL;
@@ -55,6 +56,7 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
   Mesh->nNode = (N+1)*(N+1);
   double *tempCoord; 
   int *tempE2N; 
+  int *tempE2F; 
   // allocate the coords 
   CUDA_CALL(cudaMallocManaged(&(Mesh->coord), Mesh->nNode*sizeof(double *)));  
   CUDA_CALL(cudaMallocManaged(&(tempCoord), 2*Mesh->nNode*sizeof(double))); 
@@ -97,6 +99,11 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
 
 
   Mesh->nIFace = 3*N*N;
+
+  CUDA_CALL(cudaMallocManaged(&(Mesh->E2F), Mesh->nElem*sizeof(int *)));
+  CUDA_CALL(cudaMallocManaged(&tempE2F,     Mesh->nElem*3*sizeof(int)));
+  for (i=0; i<Mesh->nElem; i++)
+    Mesh->E2F[i] = &(tempE2F[i*3]); 
   // allocate the interior faces 
   CUDA_CALL(cudaMallocManaged(&(Mesh->IFace), Mesh->nIFace*sizeof(DG_IFace))); 
 
@@ -111,6 +118,8 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
       Mesh->IFace[counter].EdgeR = 0;
       Mesh->IFace[counter].node[0] = i*(N+1)+j  +1;
       Mesh->IFace[counter].node[1] = i*(N+1)+j  +(N+1);
+      Mesh->E2F[Mesh->IFace[counter].ElemL][0] = counter; 
+      Mesh->E2F[Mesh->IFace[counter].ElemR][0] = counter; 
       
       counter ++; 
       Mesh->IFace[counter].ElemL = i*(2*N)+j*2;
@@ -120,6 +129,8 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
       Mesh->IFace[counter].EdgeR = 1;
       Mesh->IFace[counter].node[0] = i*(N+1)+j  +(N+1);
       Mesh->IFace[counter].node[1] = i*(N+1)+j;
+      Mesh->E2F[Mesh->IFace[counter].ElemL][1] = counter; 
+      Mesh->E2F[Mesh->IFace[counter].ElemR][1] = counter; 
 
       counter++;
       Mesh->IFace[counter].ElemL = i*(2*N)+j*2;
@@ -129,6 +140,9 @@ cudaError_t generateMesh(DG_Mesh *Mesh, double halfL, int N)
       Mesh->IFace[counter].EdgeR = 2;
       Mesh->IFace[counter].node[0] = i*(N+1)+j; 
       Mesh->IFace[counter].node[1] = i*(N+1)+j  +1;
+      Mesh->E2F[Mesh->IFace[counter].ElemL][2] = counter; 
+      Mesh->E2F[Mesh->IFace[counter].ElemR][2] = counter; 
+
       counter ++;
 
     }
@@ -213,6 +227,8 @@ cudaError_t freeMesh(DG_Mesh *Mesh)
   CUDA_CALL(cudaFree(Mesh->E2N));
 
   // free interior faces 
+  CUDA_CALL(cudaFree(Mesh->E2F[0]));
+  CUDA_CALL(cudaFree(Mesh->E2F));
   CUDA_CALL(cudaFree(Mesh->IFace));
 
   // free Jacobian data 

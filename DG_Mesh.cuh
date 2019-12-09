@@ -42,9 +42,11 @@ typedef struct DG_Mesh
   // Element info 
   int nElem;  // number of elemnets 
   int **E2N; // E2N matrix (hash table)
-  
+ 
+
   // Face information
   int nIFace; 
+  int **E2F; 
   DG_IFace *IFace;
 
   // Jacobian infomation 

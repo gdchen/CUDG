@@ -6,7 +6,7 @@ int main()
 {
   DG_Mesh *Mesh;
   createMesh(&Mesh); 
-  int N = 8;
+  int N = 2;
   generateMesh(Mesh,5,N);
   printf("halfL %f,  N %d,  h %f \n", Mesh->halfL,Mesh->N, Mesh->h);
   printf("nNode %d \n", Mesh->nNode);
@@ -51,6 +51,19 @@ int main()
     printf("Legth %f \n", Mesh->Length[i]);
     printf("Normal: %f %f \n", Mesh->normal[i*2], Mesh->normal[i*2+1]);
   }
+
+  printf("****************************************\n");
+  printf("E2F matrix :\n");
+  printf("****************************************\n");
+  for (i=0; i<Mesh->nElem; i++)
+  {
+    printf("%dth elem: \n", i);
+    printf("global iface: ");
+    for (j=0; j<3; j++)
+      printf("%d ", Mesh->E2F[i][j]);
+    printf("\n");
+  }
+
   freeMesh(Mesh);
 
   CUDA_CALL(cudaDeviceReset());
