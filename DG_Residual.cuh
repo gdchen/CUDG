@@ -108,8 +108,8 @@ __global__ void
 rk4_final(DG_All *All, double dt, double **f0, double **f1, double **f2, double **f3); 
 
 
-__host__ cudaError_t 
-DG_RK4(DG_All *All); 
+cudaError_t 
+DG_RK4(DG_All *All, double dt, int Nt); 
 
 
 #endif 

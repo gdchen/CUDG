@@ -166,12 +166,12 @@ int calculateFhat(double *Fhat, int nq1, const double *UL, const double *UR, con
 
 /* kernel to calculate the volume residual */
 __global__ void 
-calculateVolumeRes(const DG_All *All, const double **State, double **R){
+calculateVolumeRes(const DG_All *All, double **State, double **R){
   
   int tid = threadIdx.x;   // thread index
   int gid = blockIdx.x*blockDim.x + tid;   // global index
   
-  DG_BasisData *BasisData = All->BasisData;   // TOSO: make it in constant memory 
+  DG_BasisData *BasisData = All->BasisData;   // TODO: make it in constant memory 
   // shared memory 
   int np = BasisData->np; 
   int nq2 = BasisData->nq2; 
@@ -233,7 +233,7 @@ calculateVolumeRes(const DG_All *All, const double **State, double **R){
 
 /* kernel to calculate the face residual */
 __global__ void  
-calculateFaceRes(const DG_All *All, const double **State, double **RfL, double **RfR){
+calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
   
   int tid = threadIdx.x; 
   int gid = blockIdx.x*blockDim.x + tid; 
@@ -281,21 +281,37 @@ addRes(const DG_All *All, double **R, double **RfL, double **RfR){
 
   int tid = threadIdx.x; 
   int gid = blockIdx.x * blockDim.x + tid; 
-  int ElemL, ElemR;
-  int i;
+  int i, edge;
   int ndof = All->BasisData->np * NUM_OF_STATES; 
-  if (gid < All->Mesh->nIFace){
-    ElemL = All->Mesh->IFace[gid].ElemL; 
-    ElemR = All->Mesh->IFace[gid].ElemR; 
-    for (i=0; i<ndof; i++){
-      R[ElemL][i] -= RfL[gid][i]; 
-      R[ElemR][i] += RfR[gid][i]; 
-    }
+  //int E2F[3]; 
+  //for (edge=0; edge<3; edge++)
+  //  E2F[edge] = All->Mesh->E2F[gid]i[edge]; 
+  int ElemL, ElemR; 
+  int gface; 
 
+  if (gid < All->Mesh->nElem){
+    for (edge=0; edge<3; edge++){
+      gface = All->Mesh->E2F[gid][edge]; 
+      ElemL = All->Mesh->IFace[gface].ElemL; 
+      ElemR = All->Mesh->IFace[gface].ElemR; 
+      //ElemL = All->Mesh->IFace[All->Mesh->E2F[gid][edge]].ElemL; 
+      //ElemR = All->Mesh->IFace[All->Mesh->E2F[gid][edge]].ElemR;
+      if (gid == ElemL)
+        for (i=0; i<ndof; i++)
+          R[gid][i] -= RfL[gface][i];  
+      if (gid == ElemR)
+        for (i=0; i<ndof; i++)
+          R[gid][i] += RfR[gface][i];
+    }
   }
 
 }
 
+
+__global__ void 
+getResAllAtOnce(const DG_All *All, double **State, double **R){
+
+}
 
 __global__ void 
 Res2RHS(const DG_All *All, double **R, double **f){
@@ -344,7 +360,7 @@ rk4_final(DG_All *All, double dt, double **f0, double **f1, double **f2, double 
 
 
 /* host function to lunch kernels performing RK4 time integration */
-__host__ cudaError_t
+cudaError_t
 DG_RK4(DG_All *All, double dt, int Nt){
   
   int nElem = All->Mesh->nElem;  // # of elem 
@@ -381,12 +397,17 @@ DG_RK4(DG_All *All, double dt, int Nt){
 
   // allocation and initialization 
   for (i=0; i<nElem; i++){
-    U[i] = tempU   + i*np*NUM_OF_STATES; 
-    R[i] = tempR   + i*np*NUM_OF_STATES; 
+    U[i]  = tempU  + i*np*NUM_OF_STATES; 
+    R[i]  = tempR  + i*np*NUM_OF_STATES; 
     f0[i] = tempf0 + i*np*NUM_OF_STATES; 
     f1[i] = tempf1 + i*np*NUM_OF_STATES; 
     f2[i] = tempf2 + i*np*NUM_OF_STATES; 
     f3[i] = tempf3 + i*np*NUM_OF_STATES;  
+    for (j=0; j<np*NUM_OF_STATES; j++){
+      U[i][j] = 0;
+      R[i][j] = 0; 
+      f0[i][j] = 0;  f1[i][j] = 0; f2[i][j] = 0; f3[i][j] = 0;
+    }
   }
 
   for (i=0; i<nIFace; i++){
@@ -395,40 +416,44 @@ DG_RK4(DG_All *All, double dt, int Nt){
   }
 
 
-  int threadPerBlock = 32;
+  int threadPerBlock = 320;
   int elemBlock = (nElem + threadPerBlock - 1)/threadPerBlock; 
   int faceBlock = (nIFace + threadPerBlock -1)/threadPerBlock; 
   
 
+  printf("elem kernel lunch (%d,%d)\n",elemBlock, threadPerBlock);  
+  printf("face kernel lunch (%d,%d)\n",faceBlock, threadPerBlock);  
   // async kernel luncah 
-  // first we need to copy the states data 
-  CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
-            cudaMemcpyDeviceToDevice)); 
+  
+  int t = 0; 
+  for (t=0; t<Nt; t++){
+    // first we need to copy the states data 
+    CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
+              cudaMemcpyDeviceToDevice)); 
+    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
+    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f0); 
+    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f0);
 
-  calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-  calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-  addRes             <<<faceBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-  Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f0); 
-  rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f0);
+    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
+    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f1); 
+    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f1);
 
-  calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-  calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-  addRes             <<<faceBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-  Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f1); 
-  rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f1);
+    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
+    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f2); 
+    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt, f2);
 
-  calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-  calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-  addRes             <<<faceBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-  Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f2); 
-  rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt, f2);
-
-  calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-  calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-  addRes             <<<faceBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-  Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f3); 
-  rk4_final          <<<elemBlock, threadPerBlock>>> (All, dt/6, f0, f1, f2, f3);
-
+    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
+    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f3); 
+    rk4_final          <<<elemBlock, threadPerBlock>>> (All, dt/6, f0, f1, f2, f3);
+  }
 
   // free memory 
   CUDA_CALL(cudaFree(tempU));  CUDA_CALL(cudaFree(U));
@@ -437,7 +462,9 @@ DG_RK4(DG_All *All, double dt, int Nt){
   CUDA_CALL(cudaFree(tempf1)); CUDA_CALL(cudaFree(f1));
   CUDA_CALL(cudaFree(tempf2)); CUDA_CALL(cudaFree(f2));
   CUDA_CALL(cudaFree(tempf3)); CUDA_CALL(cudaFree(f3));
-
+  
+  CUDA_CALL(cudaFree(tempRfL)); CUDA_CALL(cudaFree(RfL));
+  CUDA_CALL(cudaFree(tempRfR)); CUDA_CALL(cudaFree(RfR));
 
   return cudaSuccess;
 
