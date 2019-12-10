@@ -14,7 +14,85 @@
 #include "DG_All.cuh"
 #include "DG_Residual.cuh"
 #include "CUDA_Helper.cuh"
+#include "DG_Const.cuh"
+/* mesh info */
+__device__ __constant__ int d_nElem; 
+__device__ __constant__ int d_nIFace; 
+//
+///* basis info */
+__device__ __constant__  int d_order;   // p
+__device__ __constant__  int d_np;      // np 
+__device__ __constant__  int d_nq1;     // nq1 
+__device__ __constant__  int d_nq2;     // nq2
+__device__ __constant__  double d_sq[MAX_NQ1]; 
+__device__ __constant__  double d_wq1[MAX_NQ1];
+__device__ __constant__  double d_EdgePhiL[3][MAX_NQ1*MAX_NP];
+__device__ __constant__  double d_EdgePhiR[3][MAX_NQ1*MAX_NP];
+__device__ __constant__  double d_xyq[2*MAX_NQ2];
+__device__ __constant__  double d_wq2[MAX_NQ2];
+__device__ __constant__  double d_Phi[MAX_NQ2*MAX_NP];
+__device__ __constant__  double d_GPhix[MAX_NQ2*MAX_NP];
+__device__ __constant__  double d_GPhiy[MAX_NQ2*MAX_NP]; 
+                        
+__device__ __constant__  double d_Dwq[MAX_NQ2*MAX_NQ2];
+__device__ __constant__  double d_Dwq1[MAX_NQ1*MAX_NQ1];
 
+static cudaError_t 
+assignConstant(DG_All *All){
+  
+  int i, j, edge;  
+  /* Mesh info */ 
+  CUDA_CALL(cudaMemcpyToSymbol(d_nElem,  &(All->Mesh->nElem),  sizeof(int)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_nIFace, &(All->Mesh->nIFace), sizeof(int)));
+
+  /* Basis info */ 
+  DG_BasisData *BasisData = All->BasisData; 
+  int order = BasisData->order;
+  int np    = BasisData->np; 
+  int nq1   = BasisData->nq1;
+  int nq2   = BasisData->nq2; 
+  CUDA_CALL(cudaMemcpyToSymbol(d_order, &(BasisData->order), sizeof(int)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_np,    &(BasisData->np),    sizeof(int)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_nq1,   &(BasisData->nq1),   sizeof(int)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_nq2,   &(BasisData->nq2),   sizeof(int)));
+  // pointers 
+  CUDA_CALL(cudaMemcpyToSymbol(d_sq,  BasisData->sq,  nq1*sizeof(double)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_wq1, BasisData->wq1, nq1*sizeof(double)));
+  for (edge=0; edge<3; edge++){
+    CUDA_CALL(cudaMemcpyToSymbol(d_EdgePhiL, BasisData->EdgePhiL[edge], 
+                                 nq1*np*sizeof(double), edge*MAX_NQ1*MAX_NP*sizeof(double)));
+    CUDA_CALL(cudaMemcpyToSymbol(d_EdgePhiR, BasisData->EdgePhiR[edge],
+                                 nq1*np*sizeof(double), edge*MAX_NQ1*MAX_NP*sizeof(double)));
+  }
+  
+  CUDA_CALL(cudaMemcpyToSymbol(d_xyq,   BasisData->xyq,   2*nq2*sizeof(double)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_wq2,   BasisData->wq2,   nq2*sizeof(double)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_Phi,   BasisData->Phi,   nq2*np*sizeof(double)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_GPhix, BasisData->GPhix, nq2*np*sizeof(double)));
+  CUDA_CALL(cudaMemcpyToSymbol(d_GPhiy, BasisData->GPhiy, nq2*np*sizeof(double)));
+  
+  double *Dwq = (double *) malloc(nq2*nq2*sizeof(double)); 
+  for (i=0; i<nq2; i++){
+    for (j=0; j<nq2; j++)
+      Dwq[i*nq2+j] = 0;
+    Dwq[i*nq2+i] = BasisData->wq2[i]; 
+  }
+  CUDA_CALL(cudaMemcpyToSymbol(d_Dwq, Dwq, nq2*nq2*sizeof(double)));
+  free(Dwq); 
+
+  double *Dwq1 = (double *)malloc(nq1*nq1*sizeof(double)); 
+  for (i=0; i<nq1; i++){
+    for (j=0; j<nq1; j++)
+      Dwq1[i*nq1+j] = 0;
+    Dwq1[i*nq1+i] = BasisData->wq1[i]; 
+  }
+  CUDA_CALL(cudaMemcpyToSymbol(d_Dwq1, Dwq1, nq1*nq1*sizeof(double)));
+  free(Dwq1);
+
+
+
+  return cudaSuccess;
+}
 
 // flux function 
 __device__ 
@@ -173,22 +251,15 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
   
   DG_BasisData *BasisData = All->BasisData;   // TODO: make it in constant memory 
   // shared memory 
-  int np = BasisData->np; 
-  int nq2 = BasisData->nq2; 
-  int nElem = All->Mesh->nElem; 
+  int np = d_np; 
+  int nq2 = d_nq2; 
+  int nElem = d_nElem; 
   // 
   double InvJac[4];  // Inverse Jacobian, only read in once, cant be shared memory 
   int i, j; 
   // global(physical) gradicents, these two array are thread locally dynamic memory 
   double *GPhix = (double *) malloc(nq2*np*sizeof(double)); 
   double *GPhiy = (double *) malloc(nq2*np*sizeof(double)); 
-  // Diagonal matrix TODO: make it in shared memory 
-  double *Dwq = (double *) malloc(nq2*nq2*sizeof(double)); 
-  for (i=0; i<nq2; i++){
-    for (j=0; j<nq2; j++)
-      Dwq[i*nq2+j] = 0;
-    Dwq[i*nq2+i] = BasisData->wq2[i]; 
-  }
   // get states at interior quad points, thread local dynamic memory  
   double *Uxy = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double)); 
   double *Fx  = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double));
@@ -202,6 +273,7 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
   /* each thread calculates the interior volume flux */
   if (gid < nElem){
     getIntQuadStates(Uxy, State[gid], BasisData); 
+    //d_getIntQuadStates();
     calculateFlux(Fx, Fy, nq2, Uxy);
     // read in once 
     for (i=0; i<4; i++)
@@ -214,16 +286,13 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
       }
     }
     //
-    DG_MTxM_Set(np, nq2, nq2, GPhix, Dwq, temp); 
+    DG_MTxM_Set(np, nq2, nq2, GPhix, d_Dwq, temp); 
     DG_MxM_Set (np, nq2, NUM_OF_STATES, temp, Fx, R[gid]);
-    DG_MTxM_Set(np, nq2, nq2, GPhiy, Dwq, temp);
+    DG_MTxM_Set(np, nq2, nq2, GPhiy, d_Dwq, temp);
     DG_MxM_Add (np, nq2, NUM_OF_STATES, temp, Fy, R[gid]); 
   }
 
   free(GPhix);  free(GPhiy);  free(Uxy);  free(Fx);  free(Fy); free(temp);
-  free(Dwq);  // TODO: move this into shared memory or constant memory 
-
-
 
 }
 
@@ -239,37 +308,31 @@ calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
   int gid = blockIdx.x*blockDim.x + tid; 
   int i, j; 
   DG_BasisData *BasisData = All->BasisData; 
-  int np  = BasisData->np; 
-  int nq1 = BasisData->nq1; 
+  int np  = d_np; 
+  int nq1 = d_nq1; 
   double *UL = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
   double *UR = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
-  // Diagonal matrix TODO: make this shared or constant memory 
-  double *Dwq1 = (double *)malloc(nq1*nq1*sizeof(double)); 
-  for (i=0; i<nq1; i++){
-    for (j=0; j<nq1; j++)
-      Dwq1[i*nq1+j] = 0;
-    Dwq1[i*nq1+i] = BasisData->wq1[i]; 
-  }
   double *Fhat = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double));
   double *temp = (double *)malloc(np*nq1*sizeof(double)); 
- 
+  
+  int nIFace = d_nIFace; 
+  DG_Mesh *Mesh = All->Mesh; 
   int ElemL, ElemR, edge; 
-  if (gid < All->Mesh->nIFace){
-    ElemL = All->Mesh->IFace[gid].ElemL; 
-    ElemR = All->Mesh->IFace[gid].ElemR; 
-    edge  = All->Mesh->IFace[gid].EdgeL;   // edgeL = edgeR
+  if (gid < nIFace){
+    ElemL = Mesh->IFace[gid].ElemL; 
+    ElemR = Mesh->IFace[gid].ElemR; 
+    edge  = Mesh->IFace[gid].EdgeL;   // edgeL = edgeR
     getEdgeQuadStates(UL, UR, edge, State[ElemL], State[ElemR], BasisData); 
     calculateFhat(Fhat, nq1, UL, UR, All->Mesh->normal+2*gid);
     
-    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiL[edge], Dwq1, temp);
+    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiL[edge], d_Dwq1, temp);
     DG_cMxM_Set(All->Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfL[gid]); // sub later
 
-    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiR[edge], Dwq1, temp); 
+    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiR[edge], d_Dwq1, temp); 
     DG_cMxM_Set(All->Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfR[gid]); // ad later
   }
 
   free(UL);  free(UR);  free(Fhat);  free(temp); 
-  free(Dwq1);  // TODO: make it in constant memory or shared memory 
 
 }
 
@@ -282,18 +345,18 @@ addRes(const DG_All *All, double **R, double **RfL, double **RfR){
   int tid = threadIdx.x; 
   int gid = blockIdx.x * blockDim.x + tid; 
   int i, edge;
-  int ndof = All->BasisData->np * NUM_OF_STATES; 
+  int ndof = d_np * NUM_OF_STATES; 
   //int E2F[3]; 
   //for (edge=0; edge<3; edge++)
   //  E2F[edge] = All->Mesh->E2F[gid]i[edge]; 
   int ElemL, ElemR; 
   int gface; 
-
-  if (gid < All->Mesh->nElem){
+  DG_Mesh *Mesh = All->Mesh; 
+  if (gid < d_nElem){
     for (edge=0; edge<3; edge++){
-      gface = All->Mesh->E2F[gid][edge]; 
-      ElemL = All->Mesh->IFace[gface].ElemL; 
-      ElemR = All->Mesh->IFace[gface].ElemR; 
+      gface = Mesh->E2F[gid][edge]; 
+      ElemL = Mesh->IFace[gface].ElemL; 
+      ElemR = Mesh->IFace[gface].ElemR; 
       //ElemL = All->Mesh->IFace[All->Mesh->E2F[gid][edge]].ElemL; 
       //ElemR = All->Mesh->IFace[All->Mesh->E2F[gid][edge]].ElemR;
       if (gid == ElemL)
@@ -318,8 +381,8 @@ Res2RHS(const DG_All *All, double **R, double **f){
 
   int tid = threadIdx.x; 
   int gid = blockIdx.x * blockDim.x + tid; 
-  int np = All->BasisData->np; 
-  if (gid < All->Mesh->nElem){
+  int np = d_np; 
+  if (gid < d_nElem){
     DG_MxM_Set(np, np, NUM_OF_STATES, All->DataSet->InvMassMatrix[gid], R[gid], f[gid]); 
   }
 
@@ -331,9 +394,9 @@ __global__ void
 rk4_inter(DG_All *All, double **State, double dt, double **f){
   int tid = threadIdx.x; 
   int gid = blockIdx.x * blockDim.x + tid; 
-  int ndof = All->BasisData->np * NUM_OF_STATES; 
+  int ndof = d_np * NUM_OF_STATES; 
   int i; 
-  if (gid < All->Mesh->nElem){
+  if (gid < d_nElem){
     for (i=0; i<ndof; i++)
       State[gid][i] = All->DataSet->State[gid][i] + dt*f[gid][i]; 
   }
@@ -348,9 +411,9 @@ rk4_final(DG_All *All, double dt, double **f0, double **f1, double **f2, double 
 
   int tid = threadIdx.x; 
   int gid = blockIdx.x * blockDim.x + tid; 
-  int ndof = All->BasisData->np * NUM_OF_STATES; 
+  int ndof = d_np * NUM_OF_STATES; 
   int i; 
-  if (gid < All->Mesh->nElem){
+  if (gid < d_nElem){
     for (i=0; i<ndof; i++)
       All->DataSet->State[gid][i] += dt*(f0[gid][i] + 2*f1[gid][i] + 2*f2[gid][i] + f3[gid][i]);
 
@@ -421,6 +484,8 @@ DG_RK4(DG_All *All, double dt, int Nt){
   int faceBlock = (nIFace + threadPerBlock -1)/threadPerBlock; 
   
 
+
+  CUDA_CALL(assignConstant(All));
   printf("elem kernel lunch (%d,%d)\n",elemBlock, threadPerBlock);  
   printf("face kernel lunch (%d,%d)\n",faceBlock, threadPerBlock);  
   // async kernel luncah 
