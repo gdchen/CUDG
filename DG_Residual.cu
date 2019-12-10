@@ -94,6 +94,29 @@ assignConstant(DG_All *All){
   return cudaSuccess;
 }
 
+
+
+// similar to getIntQuadStates duplicate functionality but use const mem
+static __device__ cudaError_t 
+d_getIntQuadStates(double *Uxy, const double *State)
+{
+  // All of the inputs should be allocated before passed in 
+  // Uxy[nq2*NUM_OF_STATES]
+  DG_MxM_Set(d_nq2, d_np, NUM_OF_STATES, d_Phi, State, Uxy);
+  return cudaSuccess;
+}
+
+// similar to getEdgeQuadStates duplicate functionlity but use const mem
+static __device__ cudaError_t 
+d_getEdgeQuadStates(double *UL, double *UR, int edge, 
+                    const double *StateL, const double *StateR)
+{
+  DG_MxM_Set(d_nq1, d_np, NUM_OF_STATES, d_EdgePhiL[edge], StateL, UL);
+  DG_MxM_Set(d_nq1, d_np, NUM_OF_STATES, d_EdgePhiR[edge], StateR, UR); 
+  return cudaSuccess;
+}
+
+
 // flux function 
 __device__ 
 int calculateFlux(double *Fx, double *Fy, int nq2, const double *Uxy)
@@ -249,7 +272,6 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
   int tid = threadIdx.x;   // thread index
   int gid = blockIdx.x*blockDim.x + tid;   // global index
   
-  DG_BasisData *BasisData = All->BasisData;   // TODO: make it in constant memory 
   // shared memory 
   int np = d_np; 
   int nq2 = d_nq2; 
@@ -272,8 +294,8 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
 
   /* each thread calculates the interior volume flux */
   if (gid < nElem){
-    getIntQuadStates(Uxy, State[gid], BasisData); 
-    //d_getIntQuadStates();
+    //getIntQuadStates(Uxy, State[gid], BasisData); 
+    d_getIntQuadStates(Uxy, State[gid]);
     calculateFlux(Fx, Fy, nq2, Uxy);
     // read in once 
     for (i=0; i<4; i++)
@@ -281,8 +303,8 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
 
     for (i=0; i<nq2; i++){
       for (j=0; j<np; j++){
-        GPhix[i*np+j] = BasisData->GPhix[i*np+j]*InvJac[0] + BasisData->GPhiy[i*np+j]*InvJac[2];
-        GPhiy[i*np+j] = BasisData->GPhix[i*np+j]*InvJac[1] + BasisData->GPhiy[i*np+j]*InvJac[3]; 
+        GPhix[i*np+j] = d_GPhix[i*np+j]*InvJac[0] + d_GPhiy[i*np+j]*InvJac[2];
+        GPhiy[i*np+j] = d_GPhix[i*np+j]*InvJac[1] + d_GPhiy[i*np+j]*InvJac[3]; 
       }
     }
     //
@@ -307,7 +329,6 @@ calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
   int tid = threadIdx.x; 
   int gid = blockIdx.x*blockDim.x + tid; 
   int i, j; 
-  DG_BasisData *BasisData = All->BasisData; 
   int np  = d_np; 
   int nq1 = d_nq1; 
   double *UL = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
@@ -322,14 +343,15 @@ calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
     ElemL = Mesh->IFace[gid].ElemL; 
     ElemR = Mesh->IFace[gid].ElemR; 
     edge  = Mesh->IFace[gid].EdgeL;   // edgeL = edgeR
-    getEdgeQuadStates(UL, UR, edge, State[ElemL], State[ElemR], BasisData); 
-    calculateFhat(Fhat, nq1, UL, UR, All->Mesh->normal+2*gid);
+    //getEdgeQuadStates(UL, UR, edge, State[ElemL], State[ElemR], BasisData); 
+    d_getEdgeQuadStates(UL, UR, edge, State[ElemL], State[ElemR]); 
+    calculateFhat(Fhat, nq1, UL, UR, Mesh->normal+2*gid);
     
-    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiL[edge], d_Dwq1, temp);
-    DG_cMxM_Set(All->Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfL[gid]); // sub later
+    DG_MTxM_Set(np, nq1, nq1, d_EdgePhiL[edge], d_Dwq1, temp);
+    DG_cMxM_Set(Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfL[gid]); // sub later
 
-    DG_MTxM_Set(np, nq1, nq1, BasisData->EdgePhiR[edge], d_Dwq1, temp); 
-    DG_cMxM_Set(All->Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfR[gid]); // ad later
+    DG_MTxM_Set(np, nq1, nq1, d_EdgePhiR[edge], d_Dwq1, temp); 
+    DG_cMxM_Set(Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfR[gid]); // ad later
   }
 
   free(UL);  free(UR);  free(Fhat);  free(temp); 
