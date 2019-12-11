@@ -416,7 +416,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
   }
 
 
-  int threadPerBlock = 512;
+  int threadPerBlock = 256;
   int elemBlock = (nElem + threadPerBlock - 1)/threadPerBlock; 
   int faceBlock = (nIFace + threadPerBlock -1)/threadPerBlock; 
   
@@ -426,6 +426,13 @@ DG_RK4(DG_All *All, double dt, int Nt){
   // async kernel luncah 
   
   int t = 0; 
+
+  // cuda time measurement
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start);
+
   for (t=0; t<Nt; t++){
     // first we need to copy the states data 
     CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
@@ -455,6 +462,13 @@ DG_RK4(DG_All *All, double dt, int Nt){
     Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f3); 
     rk4_final          <<<elemBlock, threadPerBlock>>> (All, dt/6, f0, f1, f2, f3);
   }
+
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+
+  printf("RK4 time: %.6f ms\n", milliseconds);
 
   // free memory 
   CUDA_CALL(cudaFree(tempU));  CUDA_CALL(cudaFree(U));
