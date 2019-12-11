@@ -21,10 +21,10 @@ const double SQRT2 = 1.4142135623730951;
 const int MAX_CHAR_LENGTH = 100;
 
 // const for const mem 
-const int MAX_P   = 5; 
+const int MAX_P   = 3; 
 const int MAX_NP  = (MAX_P+1)*(MAX_P+2)/2;  // 24
-const int MAX_NQ1 = 10;   // order 19 1d quad 
-const int MAX_NQ2 = 42;   // order 14 2d quad 
+const int MAX_NQ1 = 5;   // order 19 1d quad 
+const int MAX_NQ2 = 19;   // order 14 2d quad 
 
 
 
