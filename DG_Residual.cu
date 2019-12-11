@@ -501,7 +501,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
   }
 
 
-  int threadPerBlock = 320;
+  int threadPerBlock = 256;
   int elemBlock = (nElem + threadPerBlock - 1)/threadPerBlock; 
   int faceBlock = (nIFace + threadPerBlock -1)/threadPerBlock; 
   
@@ -511,37 +511,48 @@ DG_RK4(DG_All *All, double dt, int Nt){
   printf("elem kernel lunch (%d,%d)\n",elemBlock, threadPerBlock);  
   printf("face kernel lunch (%d,%d)\n",faceBlock, threadPerBlock);  
   // async kernel luncah 
-  
+  cudaStream_t stream_elem, stream_face; 
+  CUDA_CALL(cudaStreamCreate(&stream_elem));  
+  CUDA_CALL(cudaStreamCreate(&stream_face));
+
   int t = 0; 
   for (t=0; t<Nt; t++){
     // first we need to copy the states data 
     CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
               cudaMemcpyDeviceToDevice)); 
-    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f0); 
-    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f0);
+    calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
+    CUDA_CALL(cudaGetLastError());
+    CUDA_CALL(cudaDeviceSynchronize());
+    addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f0); 
+    rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt/2, f0);
 
-    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f1); 
-    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt/2, f1);
+    calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
+    CUDA_CALL(cudaDeviceSynchronize());
+    addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f1); 
+    rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt/2, f1);
 
-    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f2); 
-    rk4_inter          <<<elemBlock, threadPerBlock>>> (All, U, dt, f2);
+    calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
+    CUDA_CALL(cudaDeviceSynchronize());
+    addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f2); 
+    rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt, f2);
 
-    calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
-    calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
-    addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
-    Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f3); 
-    rk4_final          <<<elemBlock, threadPerBlock>>> (All, dt/6, f0, f1, f2, f3);
+    calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
+    calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
+    CUDA_CALL(cudaDeviceSynchronize());
+    addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
+    Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f3); 
+    rk4_final          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, dt/6, f0, f1, f2, f3);
   }
-
+  
+  // destory the cudaStream 
+  CUDA_CALL(cudaStreamDestroy(stream_elem)); 
+  CUDA_CALL(cudaStreamDestroy(stream_face));
   // free memory 
   CUDA_CALL(cudaFree(tempU));  CUDA_CALL(cudaFree(U));
   CUDA_CALL(cudaFree(tempR));  CUDA_CALL(cudaFree(R));
