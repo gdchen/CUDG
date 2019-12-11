@@ -280,14 +280,14 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
   double InvJac[4];  // Inverse Jacobian, only read in once, cant be shared memory 
   int i, j; 
   // global(physical) gradicents, these two array are thread locally dynamic memory 
-  double *GPhix = (double *) malloc(nq2*np*sizeof(double)); 
-  double *GPhiy = (double *) malloc(nq2*np*sizeof(double)); 
+  double GPhix[MAX_NQ2*MAX_NP];      //*GPhix = (double *) malloc(nq2*np*sizeof(double)); 
+  double GPhiy[MAX_NQ2*MAX_NP];      //*GPhiy = (double *) malloc(nq2*np*sizeof(double)); 
   // get states at interior quad points, thread local dynamic memory  
-  double *Uxy = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double)); 
-  double *Fx  = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double));
-  double *Fy  = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double));
+  double Uxy[MAX_NQ2*NUM_OF_STATES]; //double *Uxy = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double)); 
+  double Fx[MAX_NQ2*NUM_OF_STATES];  //double *Fx  = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double));
+  double Fy[MAX_NQ2*NUM_OF_STATES];  //double *Fy  = (double *)malloc(nq2*NUM_OF_STATES*sizeof(double));
   // temp matrix for flux calculation 
-  double *temp = (double *)malloc(np*nq2*sizeof(double)); 
+  double temp[MAX_NP*MAX_NQ2];      //double *temp = (double *)malloc(np*nq2*sizeof(double)); 
   // all the local dynamically allocated memory do not need initialization
   // as they were set in the function called later
   
@@ -314,7 +314,7 @@ calculateVolumeRes(const DG_All *All, double **State, double **R){
     DG_MxM_Add (np, nq2, NUM_OF_STATES, temp, Fy, R[gid]); 
   }
 
-  free(GPhix);  free(GPhiy);  free(Uxy);  free(Fx);  free(Fy); free(temp);
+  //free(GPhix);  free(GPhiy);  free(Uxy);  free(Fx);  free(Fy); free(temp);
 
 }
 
@@ -331,10 +331,10 @@ calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
   int i, j; 
   int np  = d_np; 
   int nq1 = d_nq1; 
-  double *UL = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
-  double *UR = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
-  double *Fhat = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double));
-  double *temp = (double *)malloc(np*nq1*sizeof(double)); 
+  double UL[MAX_NQ1*NUM_OF_STATES];    //double *UL = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
+  double UR[MAX_NQ1*NUM_OF_STATES];    //double *UR = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double)); 
+  double Fhat[MAX_NQ1*NUM_OF_STATES];  //double *Fhat = (double *)malloc(nq1*NUM_OF_STATES*sizeof(double));
+  double temp[MAX_NP*MAX_NQ1];         //double *temp = (double *)malloc(np*nq1*sizeof(double)); 
   
   int nIFace = d_nIFace; 
   DG_Mesh *Mesh = All->Mesh; 
@@ -354,7 +354,7 @@ calculateFaceRes(const DG_All *All, double **State, double **RfL, double **RfR){
     DG_cMxM_Set(Mesh->Length[gid], np, nq1, NUM_OF_STATES, temp, Fhat, RfR[gid]); // ad later
   }
 
-  free(UL);  free(UR);  free(Fhat);  free(temp); 
+  //free(UL);  free(UR);  free(Fhat);  free(temp); 
 
 }
 
@@ -534,7 +534,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
     Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f0); 
     rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt/2, f0);
     CUDA_CALL(cudaDeviceSynchronize());
-
+    
     calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
     calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
     CUDA_CALL(cudaDeviceSynchronize());
