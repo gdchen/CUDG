@@ -533,6 +533,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
     addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
     Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f0); 
     rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt/2, f0);
+    CUDA_CALL(cudaDeviceSynchronize());
 
     calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
     calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
@@ -540,6 +541,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
     addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
     Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f1); 
     rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt/2, f1);
+    CUDA_CALL(cudaDeviceSynchronize());
 
     calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
     calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
@@ -547,6 +549,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
     addRes             <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, RfL, RfR); 
     Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f2); 
     rk4_inter          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, dt, f2);
+    CUDA_CALL(cudaDeviceSynchronize());
 
     calculateVolumeRes <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, U, R);
     calculateFaceRes   <<<faceBlock, threadPerBlock, 0, stream_face>>> (All, U, RfL, RfR); 
