@@ -416,7 +416,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
   }
 
 
-  int threadPerBlock = 320;
+  int threadPerBlock = 512;
   int elemBlock = (nElem + threadPerBlock - 1)/threadPerBlock; 
   int faceBlock = (nIFace + threadPerBlock -1)/threadPerBlock; 
   
@@ -431,6 +431,7 @@ DG_RK4(DG_All *All, double dt, int Nt){
     CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
               cudaMemcpyDeviceToDevice)); 
     calculateVolumeRes <<<elemBlock, threadPerBlock>>> (All, U, R);
+    CUDA_CALL(cudaGetLastError());
     calculateFaceRes   <<<faceBlock, threadPerBlock>>> (All, U, RfL, RfR); 
     addRes             <<<elemBlock, threadPerBlock>>> (All, R, RfL, RfR); 
     Res2RHS            <<<elemBlock, threadPerBlock>>> (All, R, f0); 
