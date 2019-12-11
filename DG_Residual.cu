@@ -516,6 +516,12 @@ DG_RK4(DG_All *All, double dt, int Nt){
   CUDA_CALL(cudaStreamCreate(&stream_face));
 
   int t = 0; 
+  // cuda time measurement 
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start);
+  
   for (t=0; t<Nt; t++){
     // first we need to copy the states data 
     CUDA_CALL(cudaMemcpy(U[0], All->DataSet->State[0], nElem*np*NUM_OF_STATES*sizeof(double), 
@@ -549,7 +555,14 @@ DG_RK4(DG_All *All, double dt, int Nt){
     Res2RHS            <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, R, f3); 
     rk4_final          <<<elemBlock, threadPerBlock, 0, stream_elem>>> (All, dt/6, f0, f1, f2, f3);
   }
+
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
   
+  printf("RK4 time: %.6f ms\n", milliseconds);
+
   // destory the cudaStream 
   CUDA_CALL(cudaStreamDestroy(stream_elem)); 
   CUDA_CALL(cudaStreamDestroy(stream_face));
