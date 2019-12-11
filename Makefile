@@ -7,7 +7,7 @@ test_dep = $(test_obj:.o=.d)
 src = $(wildcard *.cu)
 obj = $(src:.cu=.o)
 dep = $(obj:.o=.d)
-FLAGS = -Xptxas -O3 -rdc=true  
+FLAGS = -Xptxas -O3 -rdc=true #--maxrregcount=80 --ptxas-options=-v #-arch=sm_52 -lineinfo 
 
 $(target): $(obj) $(test_obj)
 	nvcc $(FLAGS) $(target:.exe=.o) $(obj) -o $@ 
